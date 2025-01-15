@@ -6,6 +6,7 @@ const ChatApp = () => {
   const [conversationId, setConversationId] = useState(null);
   const [directLineClient, setDirectLineClient] = useState(null);
   const [error, setError] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(true);
 
   useEffect(() => {
     const initializeDirectLine = async () => {
@@ -16,25 +17,37 @@ const ChatApp = () => {
 
         // Initialize DirectLine client
         const client = new DirectLine({ 
-          token: process.env.REACT_APP_DIRECT_LINE_SECRET 
+          token: process.env.REACT_APP_DIRECT_LINE_SECRET,
+          webSocket: true // Enable WebSocket connection
         });
+        
         setDirectLineClient(client);
 
-        // Start conversation and get conversation ID
-        client.conversations.startConversation().subscribe(
-          conversation => {
-            setConversationId(conversation.conversationId);
-            // Send user token after conversation starts
-            sendUserToken(conversation.conversationId, client);
+        // Wait for connection status
+        client.connectionStatus$.subscribe(
+          status => {
+            if (status === 2) { // 2 means 'Connected'
+              console.log('Connected to Direct Line');
+              setIsConnecting(false);
+              // Connection is established, can now get conversation ID
+              const conversationId = client.conversationId;
+              setConversationId(conversationId);
+              if (conversationId) {
+                sendUserToken(conversationId, client);
+              }
+            }
           },
           error => {
-            console.error('Conversation start error:', error);
-            setError('Failed to start conversation. Please check your Direct Line secret.');
+            console.error('Connection status error:', error);
+            setError('Failed to connect to Direct Line. Please check your secret.');
+            setIsConnecting(false);
           }
         );
+
       } catch (err) {
         console.error('Initialization error:', err);
         setError(err.message);
+        setIsConnecting(false);
       }
     };
 
@@ -124,6 +137,12 @@ const ChatApp = () => {
     return (
       <div className="p-4 border border-red-500 rounded bg-red-50">
         <p className="text-red-600">{error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-2 px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -131,21 +150,27 @@ const ChatApp = () => {
   return (
     <div className="p-4">
       <div className="mb-4 border rounded p-4 h-96 overflow-y-auto">
-        {messages.map((msg, index) => (
-          <p key={index} className="mb-2">
-            <strong>{msg.from.name}:</strong> {msg.text}
-          </p>
-        ))}
-        {messages.length === 0 && (
+        {isConnecting ? (
+          <div className="text-center text-gray-500">
+            Connecting to chat service...
+          </div>
+        ) : messages.length === 0 ? (
           <p className="text-gray-500 text-center">
             No messages yet. Start typing to chat!
           </p>
+        ) : (
+          messages.map((msg, index) => (
+            <p key={index} className="mb-2">
+              <strong>{msg.from.name}:</strong> {msg.text}
+            </p>
+          ))
         )}
       </div>
       <input
         type="text"
         className="w-full p-2 border rounded"
         placeholder="Type a message and press Enter"
+        disabled={isConnecting}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && e.target.value.trim()) {
             sendMessage(e.target.value);
