@@ -37,8 +37,8 @@ Before running this application, make sure you have:
 
 3. Create a `.env` file in the root directory with your credentials:
    ```env
-   REACT_APP_DIRECT_LINE_SECRET=your_directline_secret_here
-   REACT_APP_USER_TOKEN=your_user_token_here
+   DIRECT_LINE_SECRET=your_directline_secret_here
+   USER_TOKEN=your_user_token_here
    ```
 
 ## Running the Application
