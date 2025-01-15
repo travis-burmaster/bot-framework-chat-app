@@ -7,6 +7,7 @@ const ChatApp = () => {
   const [directLineClient, setDirectLineClient] = useState(null);
   const [error, setError] = useState(null);
   const [isConnecting, setIsConnecting] = useState(true);
+  const clientRef = useRef();
 
   const sendUserToken = useCallback(async (convId, client) => {
     try {
@@ -47,31 +48,35 @@ const ChatApp = () => {
           throw new Error('Direct Line secret is not configured');
         }
 
-        const client = new DirectLine({ 
-          token: process.env.REACT_APP_DIRECT_LINE_SECRET,
-          webSocket: true
-        });
-        
-        setDirectLineClient(client);
+        // Only create a new client if we don't have one
+        if (!clientRef.current) {
+          const client = new DirectLine({ 
+            token: process.env.REACT_APP_DIRECT_LINE_SECRET,
+            webSocket: true
+          });
+          
+          clientRef.current = client;
+          setDirectLineClient(client);
 
-        client.connectionStatus$.subscribe(
-          status => {
-            if (status === 2) { // 2 means 'Connected'
-              console.log('Connected to Direct Line');
-              setIsConnecting(false);
-              const conversationId = client.conversationId;
-              setConversationId(conversationId);
-              if (conversationId) {
-                sendUserToken(conversationId, client);
+          client.connectionStatus$.subscribe(
+            status => {
+              if (status === 2) { // 2 means 'Connected'
+                console.log('Connected to Direct Line');
+                setIsConnecting(false);
+                const conversationId = client.conversationId;
+                setConversationId(conversationId);
+                if (conversationId) {
+                  sendUserToken(conversationId, client);
+                }
               }
+            },
+            error => {
+              console.error('Connection status error:', error);
+              setError('Failed to connect to Direct Line. Please check your secret.');
+              setIsConnecting(false);
             }
-          },
-          error => {
-            console.error('Connection status error:', error);
-            setError('Failed to connect to Direct Line. Please check your secret.');
-            setIsConnecting(false);
-          }
-        );
+          );
+        }
 
       } catch (err) {
         console.error('Initialization error:', err);
@@ -84,11 +89,12 @@ const ChatApp = () => {
     
     // Return cleanup function
     return () => {
-      if (directLineClient) {
-        directLineClient.end();
+      if (clientRef.current) {
+        clientRef.current.end();
+        clientRef.current = null;
       }
     };
-  }, [sendUserToken, directLineClient]); // Added directLineClient to dependencies
+  }, [sendUserToken]); // Removed directLineClient from dependencies
 
   // Subscribe to messages
   useEffect(() => {
