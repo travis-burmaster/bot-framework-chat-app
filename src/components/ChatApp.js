@@ -39,6 +39,15 @@ const ChatApp = () => {
     }
   }, []);
 
+  // Effect for cleanup
+  useEffect(() => {
+    return () => {
+      if (directLineClient) {
+        directLineClient.end();
+      }
+    };
+  }, []);
+
   // Initialize DirectLine client
   useEffect(() => {
     const initializeDirectLine = async () => {
@@ -81,12 +90,6 @@ const ChatApp = () => {
     };
 
     initializeDirectLine();
-
-    return () => {
-      if (directLineClient) {
-        directLineClient.end();
-      }
-    };
   }, [sendUserToken]);
 
   // Subscribe to messages
