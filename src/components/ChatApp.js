@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { DirectLine } from 'botframework-directlinejs';
 
 const ChatApp = () => {
@@ -8,79 +8,7 @@ const ChatApp = () => {
   const [error, setError] = useState(null);
   const [isConnecting, setIsConnecting] = useState(true);
 
-  useEffect(() => {
-    const initializeDirectLine = async () => {
-      try {
-        if (!process.env.REACT_APP_DIRECT_LINE_SECRET) {
-          throw new Error('Direct Line secret is not configured');
-        }
-
-        // Initialize DirectLine client
-        const client = new DirectLine({ 
-          token: process.env.REACT_APP_DIRECT_LINE_SECRET,
-          webSocket: true // Enable WebSocket connection
-        });
-        
-        setDirectLineClient(client);
-
-        // Wait for connection status
-        client.connectionStatus$.subscribe(
-          status => {
-            if (status === 2) { // 2 means 'Connected'
-              console.log('Connected to Direct Line');
-              setIsConnecting(false);
-              // Connection is established, can now get conversation ID
-              const conversationId = client.conversationId;
-              setConversationId(conversationId);
-              if (conversationId) {
-                sendUserToken(conversationId, client);
-              }
-            }
-          },
-          error => {
-            console.error('Connection status error:', error);
-            setError('Failed to connect to Direct Line. Please check your secret.');
-            setIsConnecting(false);
-          }
-        );
-
-      } catch (err) {
-        console.error('Initialization error:', err);
-        setError(err.message);
-        setIsConnecting(false);
-      }
-    };
-
-    initializeDirectLine();
-
-    return () => {
-      if (directLineClient) {
-        // Cleanup subscriptions if needed
-        directLineClient.end();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!directLineClient) return;
-
-    // Subscribe to incoming messages
-    const subscription = directLineClient.activity$.subscribe(
-      (activity) => {
-        if (activity.type === 'message') {
-          setMessages((prev) => [...prev, activity]);
-        }
-      },
-      error => {
-        console.error('Message subscription error:', error);
-        setError('Failed to receive messages. Please refresh the page.');
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [directLineClient]);
-
-  const sendUserToken = async (convId, client) => {
+  const sendUserToken = useCallback(async (convId, client) => {
     try {
       if (!process.env.REACT_APP_USER_TOKEN) {
         console.warn('User token is not configured');
@@ -109,9 +37,78 @@ const ChatApp = () => {
       console.error('Error sending token:', error);
       setError('Failed to send authentication token.');
     }
-  };
+  }, []);
 
-  const sendMessage = (text) => {
+  // Initialize DirectLine client
+  useEffect(() => {
+    const initializeDirectLine = async () => {
+      try {
+        if (!process.env.REACT_APP_DIRECT_LINE_SECRET) {
+          throw new Error('Direct Line secret is not configured');
+        }
+
+        const client = new DirectLine({ 
+          token: process.env.REACT_APP_DIRECT_LINE_SECRET,
+          webSocket: true
+        });
+        
+        setDirectLineClient(client);
+
+        client.connectionStatus$.subscribe(
+          status => {
+            if (status === 2) { // 2 means 'Connected'
+              console.log('Connected to Direct Line');
+              setIsConnecting(false);
+              const conversationId = client.conversationId;
+              setConversationId(conversationId);
+              if (conversationId) {
+                sendUserToken(conversationId, client);
+              }
+            }
+          },
+          error => {
+            console.error('Connection status error:', error);
+            setError('Failed to connect to Direct Line. Please check your secret.');
+            setIsConnecting(false);
+          }
+        );
+
+      } catch (err) {
+        console.error('Initialization error:', err);
+        setError(err.message);
+        setIsConnecting(false);
+      }
+    };
+
+    initializeDirectLine();
+
+    return () => {
+      if (directLineClient) {
+        directLineClient.end();
+      }
+    };
+  }, [sendUserToken]);
+
+  // Subscribe to messages
+  useEffect(() => {
+    if (!directLineClient) return;
+
+    const subscription = directLineClient.activity$.subscribe(
+      (activity) => {
+        if (activity.type === 'message') {
+          setMessages((prev) => [...prev, activity]);
+        }
+      },
+      error => {
+        console.error('Message subscription error:', error);
+        setError('Failed to receive messages. Please refresh the page.');
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, [directLineClient]);
+
+  const sendMessage = useCallback((text) => {
     if (!directLineClient || !conversationId) {
       setError('Chat is not ready. Please wait or refresh the page.');
       return;
@@ -131,7 +128,7 @@ const ChatApp = () => {
           setError('Failed to send message. Please try again.');
         }
       );
-  };
+  }, [directLineClient, conversationId]);
 
   if (error) {
     return (
