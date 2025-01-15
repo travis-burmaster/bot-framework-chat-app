@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { DirectLine } from 'botframework-directlinejs';
 
 const ChatApp = () => {
@@ -37,15 +37,6 @@ const ChatApp = () => {
       console.error('Error sending token:', error);
       setError('Failed to send authentication token.');
     }
-  }, []);
-
-  // Effect for cleanup
-  useEffect(() => {
-    return () => {
-      if (directLineClient) {
-        directLineClient.end();
-      }
-    };
   }, []);
 
   // Initialize DirectLine client
@@ -90,7 +81,14 @@ const ChatApp = () => {
     };
 
     initializeDirectLine();
-  }, [sendUserToken]);
+    
+    // Return cleanup function
+    return () => {
+      if (directLineClient) {
+        directLineClient.end();
+      }
+    };
+  }, [sendUserToken, directLineClient]); // Added directLineClient to dependencies
 
   // Subscribe to messages
   useEffect(() => {
